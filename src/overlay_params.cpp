@@ -78,7 +78,7 @@ size_t get_hash(T const& first, Ts const&... rest)
 
 #endif
 
-static enum overlay_param_position
+enum overlay_param_position
 parse_position(const char *str)
 {
    if (!str || !strcmp(str, "top-left"))
@@ -121,7 +121,7 @@ parse_control(const char *str)
    return ret;
 }
 
-static float
+float
 parse_float(const char *str)
 {
    float val = 0;

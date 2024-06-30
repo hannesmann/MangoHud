@@ -202,6 +202,62 @@ def control(args):
         conn.send(bytearray(':hud;', 'utf-8'))
     elif args.cmd == 'toggle-fcat':
         conn.send(bytearray(':fcat;', 'utf-8'))
+    elif args.cmd == 'reload-cfg':
+        conn.send(bytearray(':reload_cfg;', 'utf-8'))
+
+    elif args.cmd == 'upload-log':
+        conn.send(bytearray(':upload_log;', 'utf-8'))
+        now = time.monotonic()
+        while True:
+            msg = str(conn.recv(10))
+            if "NoLogFiles" in msg:
+                print("No log files to upload")
+                exit(0)
+            if "UploadFinished" in msg:
+                print("Upload has finished")
+                exit(0)
+            elapsed = time.monotonic() - now
+            if elapsed > 10:
+                print("Upload timed out")
+                exit(1)
+    elif args.cmd == 'upload-logs':
+        conn.send(bytearray(':upload_logs;', 'utf-8'))
+        now = time.monotonic()
+        while True:
+            msg = str(conn.recv(10))
+            if "NoLogFiles" in msg:
+                print("No log files to upload")
+                exit(0)
+            if "UploadFinished" in msg:
+                print("Upload has finished")
+                exit(0)
+            elapsed = time.monotonic() - now
+            if elapsed > 10:
+                print("Upload timed out")
+                exit(1)
+
+    elif args.cmd == 'reset-fps-metrics':
+        conn.send(bytearray(':reset_fps_metrics;', 'utf-8'))
+
+    elif args.cmd == 'toggle-fps-limit':
+        if args.entry:
+            conn.send(bytearray(f':fps_limit={args.entry};', 'utf-8'))
+        else:
+            conn.send(bytearray(':fps_limit;', 'utf-8'))
+    elif args.cmd == 'set-fps-limit':
+        conn.send(bytearray(f':set_fps_limit={args.limit};', 'utf-8'))
+
+    elif args.cmd == 'toggle-preset':
+        if args.entry:
+            conn.send(bytearray(f':preset={args.entry};', 'utf-8'))
+        else:
+            conn.send(bytearray(':preset;', 'utf-8'))
+
+    elif args.cmd == 'toggle-hud-position':
+        if args.position:
+            conn.send(bytearray(f':hud_position={args.position};', 'utf-8'))
+        else:
+            conn.send(bytearray(':hud_position;', 'utf-8'))
 
 def main():
     parser = argparse.ArgumentParser(description='MangoHud control client')
@@ -209,11 +265,28 @@ def main():
     parser.add_argument('--socket', '-s', type=str, help='Path to socket')
 
     commands = parser.add_subparsers(help='commands to run', dest='cmd')
+
     commands.add_parser('toggle-hud')
     commands.add_parser('toggle-logging')
     commands.add_parser('start-logging')
     commands.add_parser('stop-logging')
     commands.add_parser('toggle-fcat')
+    commands.add_parser('reload-cfg')
+    commands.add_parser('upload-log')
+    commands.add_parser('upload-logs')
+    commands.add_parser('reset-fps-metrics')
+
+    toggle_fps_limit = commands.add_parser('toggle-fps-limit')
+    toggle_fps_limit.add_argument('--entry', type=int, required=False)
+
+    set_fps_limit = commands.add_parser('set-fps-limit')
+    set_fps_limit.add_argument('limit', type=float)
+
+    toggle_preset = commands.add_parser('toggle-preset')
+    toggle_preset.add_argument('--entry', type=int, required=False)
+
+    toggle_hud_position = commands.add_parser('toggle-hud-position')
+    toggle_hud_position.add_argument('--position', type=str, required=False)
 
     args = parser.parse_args()
 

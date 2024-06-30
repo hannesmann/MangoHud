@@ -46,6 +46,12 @@ static void upload_file(std::string logFile){
   std::string url = exec(command);
   std::cout << "upload url: " << url;
   exec("xdg-open " + url);
+
+#ifdef __linux__
+  control_client_check(HUDElements.params->control, global_control_client, gpu.c_str());
+  const char * cmd = "UploadFinished";
+  control_send(global_control_client, cmd, strlen(cmd), 0, 0);
+#endif
 }
 
 static void upload_files(const std::vector<std::string>& logFiles){
@@ -57,6 +63,12 @@ static void upload_files(const std::vector<std::string>& logFiles){
   std::string url = exec(command);
   std::cout << "upload url: " << url;
   exec("xdg-open " + url);
+
+#ifdef __linux__
+  control_client_check(HUDElements.params->control, global_control_client, gpu.c_str());
+  const char * cmd = "UploadFinished";
+  control_send(global_control_client, cmd, strlen(cmd), 0, 0);
+#endif
 }
 
 static bool compareByFps(const logData &a, const logData &b)
@@ -319,12 +331,26 @@ void Logger::notify_data_valid() {
 }
 
 void Logger::upload_last_log() {
-  if(m_log_files.empty()) return;
+  if(m_log_files.empty()) {
+#ifdef __linux__
+  control_client_check(HUDElements.params->control, global_control_client, gpu.c_str());
+  const char * cmd = "NoLogFiles";
+  control_send(global_control_client, cmd, strlen(cmd), 0, 0);
+#endif
+    return;
+  }
   std::thread(upload_file, m_log_files.back()).detach();
 }
 
 void Logger::upload_last_logs() {
-  if(m_log_files.empty()) return;
+  if(m_log_files.empty()) {
+#ifdef __linux__
+  control_client_check(HUDElements.params->control, global_control_client, gpu.c_str());
+  const char * cmd = "NoLogFiles";
+  control_send(global_control_client, cmd, strlen(cmd), 0, 0);
+#endif
+    return;
+  }
   std::thread(upload_files, m_log_files).detach();
 }
 

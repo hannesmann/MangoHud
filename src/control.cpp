@@ -2,8 +2,10 @@
 #include <assert.h>
 #include <cerrno>
 #include <cstring>
+#include <chrono>
 #include <sys/socket.h>
 #include "mesa/util/os_socket.h"
+#include "fps_metrics.h"
 #include "overlay.h"
 #include "version.h"
 #include "app/mangoapp.h"
@@ -35,6 +37,61 @@ static void parse_command(overlay_params &params,
       }
    } else if (!strncmp(cmd, "fcat", cmdlen)) {
       params.enabled[OVERLAY_PARAM_ENABLED_fcat] = !params.enabled[OVERLAY_PARAM_ENABLED_fcat];
+   } else if (!strncmp(cmd, "fps_limit", cmdlen)) {
+      if (param && param[0])
+      {
+        int value = atoi(param);
+        if (value >= 0 && value < (int)params.fps_limit.size()) {
+          fps_limit_stats.targetFrameTime = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1) / params.fps_limit[value]);
+        }
+      }
+      else
+      {
+        next_fps_limit(params);
+      }
+   } else if (!strncmp(cmd, "set_fps_limit", cmdlen)) {
+      if (param && param[0])
+      {
+        float value = parse_float(param);
+        if (value > 0) {
+          fps_limit_stats.targetFrameTime = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1) / value);
+        else if (value == 0) {
+          fps_limit_stats.targetFrameTime = {};
+        }
+        }
+      }
+   } else if (!strncmp(cmd, "preset", cmdlen)) {
+      if (param && param[0])
+      {
+        int value = atoi(param);
+        if (value >= 0 && value < (int)params.preset.size()) {
+          current_preset = params.preset[value];
+          parse_overlay_config(&params, getenv("MANGOHUD_CONFIG"), true);
+        }
+      }
+      else
+      {
+        next_preset(params);
+      }
+   } else if (!strncmp(cmd, "hud_position", cmdlen)) {
+      if (param && param[0])
+      {
+        params.position = parse_position(param);
+      }
+      else
+      {
+        next_hud_position(params);
+      }
+   } else if (!strncmp(cmd, "reload_cfg", cmdlen)) {
+      parse_overlay_config(&params, getenv("MANGOHUD_CONFIG"), false);
+      _params = &params;
+   } else if (params.permit_upload && !strncmp(cmd, "upload_log", cmdlen)) {
+      logger->upload_last_log();
+   } else if (params.permit_upload && !strncmp(cmd, "upload_logs", cmdlen)) {
+      logger->upload_last_logs();
+   } else if (!strncmp(cmd, "reset_fps_metrics", cmdlen)) {
+      if (fpsmetrics)
+        fpsmetrics->reset_metrics();
    }
 }
 
@@ -132,7 +189,7 @@ void control_send(int control_client,
 static void control_send_connection_string(int control_client, const std::string& deviceName)
 {
    const char *controlVersionCmd = "MangoHudControlVersion";
-   const char *controlVersionString = "1";
+   const char *controlVersionString = "2";
 
    control_send(control_client, controlVersionCmd, strlen(controlVersionCmd),
                 controlVersionString, strlen(controlVersionString));

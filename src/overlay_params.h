@@ -327,6 +327,8 @@ struct overlay_params {
 
 const extern char *overlay_param_names[];
 
+enum overlay_param_position parse_position(const char *str);
+float parse_float(const char *str);
 void parse_overlay_config(struct overlay_params *params,
                        const char *env, bool ignore_preset);
 void presets(int preset, struct overlay_params *params, bool inherit=false);
