@@ -121,6 +121,8 @@ void render_mpris_metadata(const overlay_params& params, mutexed_metadata& meta,
 #endif
 void update_fan();
 void next_hud_position(struct overlay_params& params);
+void next_fps_limit(struct overlay_params& params);
+void next_preset(struct overlay_params& params);
 void horizontal_separator(struct overlay_params& params);
 void RenderOutlinedText(const char* text, ImU32 textColor);
 #endif //MANGOHUD_OVERLAY_H

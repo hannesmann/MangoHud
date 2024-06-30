@@ -1104,3 +1104,31 @@ void next_hud_position(struct overlay_params& params){
       params.position = static_cast<overlay_param_position>(0);
    }
 }
+
+void next_fps_limit(struct overlay_params& params) {
+   for (size_t i = 0; i < params.fps_limit.size(); i++){
+      uint32_t fps_limit = params.fps_limit[i];
+      // current fps limit equals vector entry, use next / first
+      if((fps_limit > 0 && fps_limit_stats.targetFrameTime == std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1) / params.fps_limit[i]))
+            || (fps_limit == 0 && fps_limit_stats.targetFrameTime == fps_limit_stats.targetFrameTime.zero())) {
+         uint32_t newFpsLimit = i+1 == params.fps_limit.size() ? params.fps_limit[0] : params.fps_limit[i+1];
+         if(newFpsLimit > 0) {
+            fps_limit_stats.targetFrameTime = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1) / newFpsLimit);
+         } else {
+            fps_limit_stats.targetFrameTime = {};
+         }
+         break;
+      }
+   }
+}
+
+void next_preset(struct overlay_params& params){
+   size_t size = params.preset.size();
+   for (size_t i = 0; i < size; i++){
+      if(params.preset[i] == current_preset) {
+         current_preset = params.preset[++i%size];
+         parse_overlay_config(&params, getenv("MANGOHUD_CONFIG"), true);
+         break;
+      }
+   }
+}
