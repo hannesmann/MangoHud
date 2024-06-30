@@ -100,23 +100,46 @@ parse_position(const char *str)
    return LAYER_POSITION_TOP_LEFT;
 }
 
-static int
-parse_control(const char *str)
+static std::string
+get_control_path(const char* str, int attempt)
 {
    std::string path(str);
+
    size_t npos = path.find("%p");
    if (npos != std::string::npos)
       path.replace(npos, 2, std::to_string(getpid()));
-   SPDLOG_DEBUG("Socket: {}", path);
 
-   int ret = os_socket_listen_abstract(path.c_str(), 1);
-   if (ret < 0) {
-      SPDLOG_DEBUG("Couldn't create socket pipe at '{}'", path);
-      SPDLOG_DEBUG("ERROR: '{}'", strerror(errno));
-      return ret;
+   if (attempt > 0) {
+      path += "-" + std::to_string(attempt + 1);
    }
 
-   os_socket_block(ret, false);
+   return path;
+}
+
+#define MAX_CONTROL_SOCKET 100
+
+static int
+parse_control(const char *str)
+{
+   int ret = -1;
+
+   for (int i = 0; i < MAX_CONTROL_SOCKET; i++) {
+      std::string path = get_control_path(str, i);
+      SPDLOG_DEBUG("Socket: {}", path);
+      ret = os_socket_listen_abstract(path.c_str(), 1);
+
+      if (ret < 0) {
+         SPDLOG_DEBUG("Couldn't create socket pipe at '{}'", path);
+         SPDLOG_DEBUG("ERROR: '{}'", strerror(errno));
+
+         if (errno != EADDRINUSE)
+            break;
+      }
+      else {
+         os_socket_block(ret, false);
+         break;
+      }
+   }
 
    return ret;
 }
