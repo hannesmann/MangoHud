@@ -158,7 +158,7 @@ def control(args):
     conn = Connection(address)
     msgparser = MsgParser(conn)
 
-    version = None
+    version = 0
     name = None
     mangohud_version = None
 
@@ -202,62 +202,67 @@ def control(args):
         conn.send(bytearray(':hud;', 'utf-8'))
     elif args.cmd == 'toggle-fcat':
         conn.send(bytearray(':fcat;', 'utf-8'))
-    elif args.cmd == 'reload-cfg':
-        conn.send(bytearray(':reload_cfg;', 'utf-8'))
 
-    elif args.cmd == 'upload-log':
-        conn.send(bytearray(':upload_log;', 'utf-8'))
-        now = time.monotonic()
-        while True:
-            msg = str(conn.recv(10))
-            if "NoLogFiles" in msg:
-                print("No log files to upload")
-                exit(0)
-            if "UploadFinished" in msg:
-                print("Upload has finished")
-                exit(0)
-            elapsed = time.monotonic() - now
-            if elapsed > 10:
-                print("Upload timed out")
-                exit(1)
-    elif args.cmd == 'upload-logs':
-        conn.send(bytearray(':upload_logs;', 'utf-8'))
-        now = time.monotonic()
-        while True:
-            msg = str(conn.recv(10))
-            if "NoLogFiles" in msg:
-                print("No log files to upload")
-                exit(0)
-            if "UploadFinished" in msg:
-                print("Upload has finished")
-                exit(0)
-            elapsed = time.monotonic() - now
-            if elapsed > 10:
-                print("Upload timed out")
-                exit(1)
+    elif version >= 2:
+        if args.cmd == 'reload-cfg':
+            conn.send(bytearray(':reload_cfg;', 'utf-8'))
 
-    elif args.cmd == 'reset-fps-metrics':
-        conn.send(bytearray(':reset_fps_metrics;', 'utf-8'))
+        elif args.cmd == 'upload-log':
+            conn.send(bytearray(':upload_log;', 'utf-8'))
+            now = time.monotonic()
+            while True:
+                msg = str(conn.recv(10))
+                if "NoLogFiles" in msg:
+                    print("No log files to upload")
+                    exit(0)
+                if "UploadFinished" in msg:
+                    print("Upload has finished")
+                    exit(0)
+                elapsed = time.monotonic() - now
+                if elapsed > 10:
+                    print("Upload timed out")
+                    exit(1)
+        elif args.cmd == 'upload-logs':
+            conn.send(bytearray(':upload_logs;', 'utf-8'))
+            now = time.monotonic()
+            while True:
+                msg = str(conn.recv(10))
+                if "NoLogFiles" in msg:
+                    print("No log files to upload")
+                    exit(0)
+                if "UploadFinished" in msg:
+                    print("Upload has finished")
+                    exit(0)
+                elapsed = time.monotonic() - now
+                if elapsed > 10:
+                    print("Upload timed out")
+                    exit(1)
 
-    elif args.cmd == 'toggle-fps-limit':
-        if args.entry:
-            conn.send(bytearray(f':fps_limit={args.entry};', 'utf-8'))
-        else:
-            conn.send(bytearray(':fps_limit;', 'utf-8'))
-    elif args.cmd == 'set-fps-limit':
-        conn.send(bytearray(f':set_fps_limit={args.limit};', 'utf-8'))
+        elif args.cmd == 'reset-fps-metrics':
+            conn.send(bytearray(':reset_fps_metrics;', 'utf-8'))
 
-    elif args.cmd == 'toggle-preset':
-        if args.entry:
-            conn.send(bytearray(f':preset={args.entry};', 'utf-8'))
-        else:
-            conn.send(bytearray(':preset;', 'utf-8'))
+        elif args.cmd == 'toggle-fps-limit':
+            if args.entry:
+                conn.send(bytearray(f':fps_limit={args.entry};', 'utf-8'))
+            else:
+                conn.send(bytearray(':fps_limit;', 'utf-8'))
+        elif args.cmd == 'set-fps-limit':
+            conn.send(bytearray(f':set_fps_limit={args.limit};', 'utf-8'))
 
-    elif args.cmd == 'toggle-hud-position':
-        if args.position:
-            conn.send(bytearray(f':hud_position={args.position};', 'utf-8'))
-        else:
-            conn.send(bytearray(':hud_position;', 'utf-8'))
+        elif args.cmd == 'toggle-preset':
+            if args.entry:
+                conn.send(bytearray(f':preset={args.entry};', 'utf-8'))
+            else:
+                conn.send(bytearray(':preset;', 'utf-8'))
+
+        elif args.cmd == 'toggle-hud-position':
+            if args.position:
+                conn.send(bytearray(f':hud_position={args.position};', 'utf-8'))
+            else:
+                conn.send(bytearray(':hud_position;', 'utf-8'))
+
+    else:
+        print('Command {} not supported by receiver (protocol {})'.format(args.cmd, version))
 
 def main():
     parser = argparse.ArgumentParser(description='MangoHud control client')
