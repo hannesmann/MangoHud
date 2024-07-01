@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-import os
-import socket
-import sys
-import select
-from select import EPOLLIN, EPOLLPRI, EPOLLERR
 import time
-from collections import namedtuple
 import argparse
 
-TIMEOUT = 1.0 # seconds
+from concurrent.futures import ThreadPoolExecutor
+
+from connection import Connection
+from msgparser import MsgParser
+from procfs import find_abstract_sockets
 
 VERSION_HEADER = bytearray('MangoHudControlVersion', 'utf-8')
 DEVICE_NAME_HEADER = bytearray('DeviceName', 'utf-8')
@@ -16,145 +14,7 @@ MANGOHUD_VERSION_HEADER = bytearray('MangoHudVersion', 'utf-8')
 
 DEFAULT_SERVER_ADDRESS = "\0mangohud"
 
-class Connection:
-    def __init__(self, path):
-        # Create a Unix Domain socket and connect
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        try:
-            sock.connect(path)
-        except socket.error as msg:
-            print(msg)
-            sys.exit(1)
-
-        self.sock = sock
-
-        # initialize poll interface and register socket
-        epoll = select.epoll()
-        epoll.register(sock, EPOLLIN | EPOLLPRI | EPOLLERR)
-        self.epoll = epoll
-
-    def recv(self, timeout):
-        '''
-        timeout as float in seconds
-        returns:
-            - None on error or disconnection
-            - bytes() (empty) on timeout
-        '''
-
-        events = self.epoll.poll(timeout)
-        for ev in events:
-            (fd, event) = ev
-            if fd != self.sock.fileno():
-                continue
-
-            # check for socket error
-            if event & EPOLLERR:
-                return None
-
-            # EPOLLIN or EPOLLPRI, just read the message
-            msg = self.sock.recv(4096)
-
-            # socket disconnected
-            if len(msg) == 0:
-                return None
-
-            return msg
-
-        return bytes()
-
-    def send(self, msg):
-        self.sock.send(msg)
-
-class MsgParser:
-    MSGBEGIN = bytes(':', 'utf-8')[0]
-    MSGEND = bytes(';', 'utf-8')[0]
-    MSGSEP = bytes('=', 'utf-8')[0]
-
-    def __init__(self, conn):
-        self.cmdpos = 0
-        self.parampos = 0
-        self.bufferpos = 0
-        self.reading_cmd = False
-        self.reading_param = False
-        self.buffer = None
-        self.cmd = bytearray(4096)
-        self.param = bytearray(4096)
-
-        self.conn = conn
-
-    def readCmd(self, ncmds, timeout=TIMEOUT):
-        '''
-        returns:
-            - None on error or disconnection
-            - bytes() (empty) on timeout
-        '''
-
-        parsed = []
-
-        remaining = timeout
-
-        while remaining > 0 and ncmds > 0:
-            now = time.monotonic()
-
-            if self.buffer == None:
-                self.buffer = self.conn.recv(remaining)
-                self.bufferpos = 0
-
-            # disconnected or error
-            if self.buffer == None:
-                return None
-
-            for i in range(self.bufferpos, len(self.buffer)):
-                c = self.buffer[i]
-                self.bufferpos += 1
-                if c == self.MSGBEGIN:
-                    self.cmdpos = 0
-                    self.parampos = 0
-                    self.reading_cmd = True
-                    self.reading_param = False
-                elif c == self.MSGEND:
-                    if not self.reading_cmd:
-                        continue
-                    self.reading_cmd = False
-                    self.reading_param = False
-
-                    cmd = self.cmd[0:self.cmdpos]
-                    param = self.param[0:self.parampos]
-                    self.reading_cmd = False
-                    self.reading_param = False
-
-                    parsed.append((cmd, param))
-                    ncmds -= 1
-                    if ncmds == 0:
-                        break
-                elif c == self.MSGSEP:
-                    if self.reading_cmd:
-                        self.reading_param = True
-                else:
-                    if self.reading_param:
-                        self.param[self.parampos] = c
-                        self.parampos += 1
-                    elif self.reading_cmd:
-                        self.cmd[self.cmdpos] = c
-                        self.cmdpos += 1
-
-            # if we read the entire buffer and didn't finish the command,
-            # throw it away
-            self.buffer = None
-
-            # check if we have time for another iteration
-            elapsed = time.monotonic() - now
-            remaining = max(0, remaining - elapsed)
-
-        # timeout
-        return parsed
-
-def control(args):
-    if args.socket:
-        address = '\0' + args.socket
-    else:
-        address = DEFAULT_SERVER_ADDRESS
-
+def send_command(args, address):
     conn = Connection(address)
     msgparser = MsgParser(conn)
 
@@ -174,11 +34,10 @@ def control(args):
             mangohud_version = param.decode('utf-8')
 
     if args.info:
-        info = "Protocol Version: {}\n"
-        info += "Device Name: {}\n"
-        info += "MangoHud Version: {}"
-        print(info.format(version, name, mangohud_version))
-
+        info = "{addr}: Protocol Version: {}\n"
+        info += "{addr}: Device Name: {}\n"
+        info += "{addr}: MangoHud Version: {}"
+        print(info.format(version, name, mangohud_version, addr=address))
 
     if args.cmd == 'toggle-logging':
         conn.send(bytearray(':logging;', 'utf-8'))
@@ -191,12 +50,12 @@ def control(args):
         while True:
             msg = str(conn.recv(3))
             if "LoggingFinished" in msg:
-                print("Logging has stopped")
-                exit(0)
+                print(f"{address}: Logging has stopped")
+                return True
             elapsed = time.monotonic() - now
             if elapsed > 3:
-                print("Stop logging timed out")
-                exit(1)
+                print(f"{address}: Stop logging timed out")
+                return False
 
     elif args.cmd == 'toggle-hud':
         conn.send(bytearray(':hud;', 'utf-8'))
@@ -213,30 +72,30 @@ def control(args):
             while True:
                 msg = str(conn.recv(10))
                 if "NoLogFiles" in msg:
-                    print("No log files to upload")
-                    exit(0)
-                if "UploadFinished" in msg:
-                    print("Upload has finished")
-                    exit(0)
+                    print(f"{address}: No log files to upload")
+                    return True
+                elif "UploadFinished" in msg:
+                    print(f"{address}: Upload has finished")
+                    return False
                 elapsed = time.monotonic() - now
                 if elapsed > 10:
-                    print("Upload timed out")
-                    exit(1)
+                    print(f"{address}:Upload timed out")
+                    return False
         elif args.cmd == 'upload-logs':
             conn.send(bytearray(':upload_logs;', 'utf-8'))
             now = time.monotonic()
             while True:
                 msg = str(conn.recv(10))
                 if "NoLogFiles" in msg:
-                    print("No log files to upload")
-                    exit(0)
-                if "UploadFinished" in msg:
-                    print("Upload has finished")
-                    exit(0)
+                    print(f"{address}: No log files to upload")
+                    return True
+                elif "UploadFinished" in msg:
+                    print(f"{address}: Upload has finished")
+                    return True
                 elapsed = time.monotonic() - now
                 if elapsed > 10:
-                    print("Upload timed out")
-                    exit(1)
+                    print(f"{address}: Upload timed out")
+                    return False
 
         elif args.cmd == 'reset-fps-metrics':
             conn.send(bytearray(':reset_fps_metrics;', 'utf-8'))
@@ -262,7 +121,30 @@ def control(args):
                 conn.send(bytearray(':hud_position;', 'utf-8'))
 
     else:
-        print('Command {} not supported by receiver (protocol {})'.format(args.cmd, version))
+        print(f"{address}: Command {args.cmd} not supported by receiver (protocol {version})")
+        return False
+
+    return True
+
+def control(args):
+    futures = []
+
+    with ThreadPoolExecutor() as executor:
+        if args.socket:
+            try:
+                candidates = find_abstract_sockets(args.socket) or [args.socket]
+            except IOError:
+                candidates = [args.socket]
+
+            for socket in candidates:
+                futures.append(executor.submit(send_command, args, '\0' + socket))
+        else:
+            futures.append(executor.submit(send_command, args, DEFAULT_SERVER_ADDRESS))
+
+    if any([not f.result() for f in futures]):
+        return 1
+
+    return 0
 
 def main():
     parser = argparse.ArgumentParser(description='MangoHud control client')
@@ -295,7 +177,7 @@ def main():
 
     args = parser.parse_args()
 
-    control(args)
+    return control(args)
 
 if __name__ == '__main__':
     main()
