@@ -148,28 +148,30 @@ static void do_imgui_swap(void *dpy, void *drawable)
     if (!is_blacklisted()) {
         imgui_create(glx.GetCurrentContext(), gl_wsi::GL_WSI_GLX);
 
-        unsigned int width = -1, height = -1;
+        if (imgui_prepare()) {
+            unsigned int width = -1, height = -1;
 
-        switch (params.gl_size_query)
-        {
-            case GL_SIZE_VIEWPORT:
-                glGetIntegerv (GL_VIEWPORT, vp);
-                width = vp[2];
-                height = vp[3];
-                break;
-            case GL_SIZE_SCISSORBOX:
-                glGetIntegerv (GL_SCISSOR_BOX, vp);
-                width = vp[2];
-                height = vp[3];
-                break;
-            default:
-                glx.QueryDrawable(dpy, drawable, GLX_WIDTH, &width);
-                glx.QueryDrawable(dpy, drawable, GLX_HEIGHT, &height);
-                break;
+            switch (params.gl_size_query)
+            {
+                case GL_SIZE_VIEWPORT:
+                    glGetIntegerv (GL_VIEWPORT, vp);
+                    width = vp[2];
+                    height = vp[3];
+                    break;
+                case GL_SIZE_SCISSORBOX:
+                    glGetIntegerv (GL_SCISSOR_BOX, vp);
+                    width = vp[2];
+                    height = vp[3];
+                    break;
+                default:
+                    glx.QueryDrawable(dpy, drawable, GLX_WIDTH, &width);
+                    glx.QueryDrawable(dpy, drawable, GLX_HEIGHT, &height);
+                    break;
+            }
+
+            SPDLOG_TRACE("swap buffers: {}x{}", width, height);
+            imgui_render(width, height);
         }
-
-        SPDLOG_TRACE("swap buffers: {}x{}", width, height);
-        imgui_render(width, height);
     }
 }
 

@@ -19,6 +19,7 @@ void imgui_init();
 void imgui_create(void *ctx, const gl_wsi plat);
 void imgui_shutdown();
 void imgui_set_context(void *ctx, const gl_wsi plat);
+bool imgui_prepare();
 void imgui_render(unsigned int width, unsigned int height);
 
 }} // namespace

@@ -55,10 +55,12 @@ EXPORT_C_(unsigned int) eglSwapBuffers( void* dpy, void* surf)
 
         imgui_create(surf, gl_wsi::GL_WSI_EGL);
 
-        int width=0, height=0;
-        if (pfn_eglQuerySurface(dpy, surf, 0x3056, &height) &&
-            pfn_eglQuerySurface(dpy, surf, 0x3057, &width))
-            imgui_render(width, height);
+        if (imgui_prepare()) {
+            int width=0, height=0;
+            if (pfn_eglQuerySurface(dpy, surf, 0x3056, &height) &&
+                pfn_eglQuerySurface(dpy, surf, 0x3057, &width))
+                imgui_render(width, height);
+        }
 
         using namespace std::chrono_literals;
         if (fps_limit_stats.targetFrameTime > 0s && fps_limit_stats.method == FPS_LIMIT_METHOD_EARLY){
